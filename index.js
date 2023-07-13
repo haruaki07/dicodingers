@@ -46,17 +46,17 @@ async function main() {
     const containerSelector = "div.classroom-container"
     const nextLinkSelector = ".classroom-bottom-nav__next"
 
+    await Promise.all([
+      page.waitForSelector(containerSelector),
+      page.waitForSelector(nextLinkSelector),
+    ])
+
     const isDisabled = await page.evaluate((selector) => {
       const nextBtn = document.querySelector(selector)
       return nextBtn.classList.contains("disabled")
     }, nextLinkSelector)
 
     if (isDisabled) break
-
-    await Promise.all([
-      page.waitForSelector(containerSelector),
-      page.waitForSelector(nextLinkSelector),
-    ])
 
     const containerEl = await page.$(containerSelector)
 

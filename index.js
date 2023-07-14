@@ -1,6 +1,5 @@
 const puppeteer = require("puppeteer-core")
 const config = require("./config.json")
-const { createCursor, installMouseHelper } = require("ghost-cursor")
 const readline = require("readline/promises")
 const chalk = require("chalk")
 
@@ -40,9 +39,19 @@ async function main() {
   const browser = await initBrowser()
   const page = await browser.newPage()
 
-  // ghost-cursor init
-  const cursor = createCursor(page)
-  if (DEBUG) await installMouseHelper(page)
+  await page.setRequestInterception(true)
+  page.on("request", (request) => {
+    if (
+      ["image", "stylesheet", "font", "script"].includes(
+        request.resourceType()
+      ) &&
+      !new URL(request.url()).hostname.endsWith("cloudfront.net")
+    ) {
+      request.abort()
+    } else {
+      request.continue()
+    }
+  })
 
   await setCookie(page)
   await page.goto(link)
@@ -66,7 +75,10 @@ async function main() {
     const isDisabled = await nextLinkEl.evaluate((el) =>
       el.classList.contains("disabled")
     )
-    if (isDisabled) break
+    if (isDisabled) {
+      console.log(`└─ ${chalk.yellow("WARN")} Next link is disabled!`)
+      break
+    }
 
     const isExam = await page.evaluate(() => window.isExam)
     if (isExam) {
@@ -98,7 +110,7 @@ async function main() {
     )
     const containerEl = await page.$(containerSelector)
 
-    // scroll to end
+    // scroll to end. is this even necessary?
     await containerEl.evaluate((el) => {
       const duration = 2000 // 2s
       const startScrollY = el.scrollTop
@@ -129,7 +141,18 @@ async function main() {
       window.requestAnimationFrame(scrollDown)
     })
 
-    await cursor.click(nextLinkSelector)
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded" }),
+      page.click(nextLinkSelector),
+      page.waitForSelector(
+        [
+          containerSelector,
+          nextLinkSelector,
+          academyNameSelector,
+          tutorialNameSelector,
+        ].join(", ")
+      ),
+    ])
     console.log(`└─ ${chalk.green("DONE")} ${tutorialName} | ${academyName}`)
     lastLink = page.url()
   }

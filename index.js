@@ -11,8 +11,7 @@ const initBrowser = () => {
   return puppeteer.launch({
     headless: !DEBUG || DEBUG_HEADLESS,
     handleSIGINT: true,
-    executablePath:
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    executablePath: config.chrome_path,
   })
 }
 

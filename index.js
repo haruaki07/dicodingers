@@ -56,14 +56,10 @@ async function main() {
     // TODO: skip classroom
     const unvisitedSelector = ".module-list-item__status svg path:only-child"
 
-    await page.waitForSelector(
-      [
-        containerSelector,
-        nextLinkSelector,
-        academyNameSelector,
-        tutorialNameSelector,
-      ].join(", ")
-    )
+    if (await page.evaluate(() => window._authed === false)) {
+      console.log(`└─ ${chalk.red("EROR")} Not authenticed!`)
+      break
+    }
 
     const nextLinkEl = await page.$(nextLinkSelector)
     if (nextLinkEl !== null) console.log(`┌ Found next link!`)

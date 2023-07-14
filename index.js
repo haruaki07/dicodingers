@@ -3,15 +3,14 @@ const config = require("./config.json")
 const readline = require("readline/promises")
 const chalk = require("chalk")
 
-const containerSelector = "div.classroom-container"
 const nextLinkSelector = ".classroom-bottom-nav__next"
 const academyNameSelector = ".classroom-top-nav__title > p"
 const tutorialNameSelector = ".classroom-bottom-nav__title"
 // TODO: skip classroom
 const unvisitedSelector = ".module-list-item__status svg path:only-child"
-const cache = {}
 
 async function main() {
+  const start_time = performance.now()
   try {
     const opts = getOptions()
 
@@ -54,39 +53,7 @@ async function main() {
       ) {
         request.abort()
       } else {
-        // respond cached response if exist
-        if (cache[url] && cache[url].expires > Date.now()) {
-          await request.respond(cache[url])
-          return
-        }
         request.continue()
-      }
-    })
-
-    // handle caching
-    page.on("response", async (response) => {
-      const url = response.url()
-      const headers = response.headers()
-      const cacheControl = headers["cache-control"] || ""
-      const maxAgeMatch = cacheControl.match(/max-age=(\d+)/)
-      const maxAge =
-        maxAgeMatch && maxAgeMatch.length > 1 ? parseInt(maxAgeMatch[1], 10) : 0
-      if (maxAge) {
-        if (!cache[url] || cache[url].expires > Date.now()) return
-
-        let buffer
-        try {
-          buffer = await response.buffer()
-        } catch {
-          return
-        }
-
-        cache[url] = {
-          status: response.status(),
-          headers: response.headers(),
-          body: buffer,
-          expires: Date.now() + maxAge * 1000,
-        }
       }
     })
 
@@ -150,52 +117,18 @@ async function main() {
         tutorialNameSelector,
         (el) => el.textContent
       )
-      const containerEl = await page.$(containerSelector)
-
-      // scroll to end. is this even necessary?
-      await containerEl.evaluate((el) => {
-        const duration = 2000 // 2s
-        const startScrollY = el.scrollTop
-        const targetScrollY = startScrollY + el.scrollHeight
-        let startTime
-
-        function scrollDown(timestamp) {
-          if (!startTime) {
-            startTime = timestamp
-          }
-          const elapsed = timestamp - startTime
-          const progress = Math.min(elapsed / duration, 1) // clamp progress to 1 after duration is exceeded
-          const easedProgress = easeOutBack(progress)
-          const deltaY = (targetScrollY - startScrollY) * easedProgress
-          el.scrollTo(0, startScrollY + deltaY)
-          if (progress < 1) {
-            window.requestAnimationFrame(scrollDown)
-          }
-        }
-
-        function easeOutBack(x) {
-          const c1 = 1.70158
-          const c3 = c1 + 1
-
-          return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)
-        }
-
-        window.requestAnimationFrame(scrollDown)
-      })
 
       // click next link and wait until ready
       await Promise.all([
         page.waitForNavigation({ waitUntil: "domcontentloaded" }),
         page.click(nextLinkSelector),
         page.waitForSelector(
-          [
-            containerSelector,
-            nextLinkSelector,
-            academyNameSelector,
-            tutorialNameSelector,
-          ].join(", ")
+          [nextLinkSelector, academyNameSelector, tutorialNameSelector].join(
+            ", "
+          )
         ),
       ])
+
       console.log(`└─ ${chalk.green("DONE")} ${tutorialName} | ${academyName}`)
       lastLink = page.url()
       count++
@@ -203,11 +136,12 @@ async function main() {
 
     console.log(`\nLast link: ${lastLink}`)
     await browser.close()
-    process.exit(0)
   } catch (e) {
     console.error("An error occurred: ", e)
     process.exitCode = 2
   }
+
+  console.log("\nTime\t%dms", performance.now() - start_time)
 }
 
 /**
